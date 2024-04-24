@@ -1,0 +1,50 @@
+def train_model(model, train_data, valid_data, edge_index, edge_weight, batch_size=20, valid_batch_size = 50, epochs=40, lr=0.001, weight_decay=1e-4, path=None, device='cpu'):
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    train_mse, valid_mse = [], []
+
+    train_loader = tg.loader.DataLoader(train_data, batch_size=batch_size, shuffle=True)
+    valid_loader = tg.loader.DataLoader(valid_data, batch_size=valid_batch_size, shuffle=False)
+
+    for epoch in range(epochs):
+
+        # Training
+        train_loss = 0
+        iters = 0
+        for data in train_loader:
+            x = data.x.to(device)
+            y = data.y.to(device)
+
+            optimizer.zero_grad()
+            output = model(x, train_data.edge_index, train_data.edge_weight)
+            loss = criterion(output,y)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item()
+            iters += 1
+        train_mse.append(train_loss / iters)
+
+        # Validation
+        model.eval()
+        valid_loss = 0
+        iters = 0
+        with torch.no_grad():
+            for data in valid_loader:
+                x = data.x.to(device)
+                y = data.y.to(device)
+
+                output = model(x, valid_data.edge_index, valid_data.edge_weight)
+                loss = criterion(output,y)
+                valid_loss += loss.item()
+                iters += 1
+            valid_mse.append(valid_loss / iters)
+
+        if valid_mse[-1] == max(valid_mse) and path is not None:
+            print("Current State Saved")
+            torch.save(model.state_dict(), path)
+
+        print(f"Epoch: {epoch}, Train MSE {train_mse[-1]}, Validation MSE {valid_mse[-1]}")
+
+    return train_mse, valid_mse, train_loader
